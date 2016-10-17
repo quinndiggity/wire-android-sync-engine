@@ -22,10 +22,10 @@ import com.google.android.gms.common.{ConnectionResult, GooglePlayServicesUtil}
 import com.google.android.gms.gcm.GoogleCloudMessaging
 import com.google.android.gms.iid.InstanceID
 import com.localytics.android.Localytics
-import com.waz.HockeyApp
-import com.waz.HockeyApp.NoReporting
-import com.waz.ZLog._
+import com.waz.Analytics
+import com.waz.Analytics.NoReporting
 import com.waz.ZLog.ImplicitTag._
+import com.waz.ZLog._
 import com.waz.model._
 import com.waz.service.push.GcmGlobalService.{GcmRegistration, GcmSenderId}
 import com.waz.service.{BackendConfig, MetaDataService, PreferenceService}
@@ -71,6 +71,7 @@ class GcmGlobalService(context: Context, val prefs: PreferenceService, metadata:
     }
   }
 
+<<<<<<< 8f92a955a719719a5e00fbe4b6862c20b86609be
   //removes the current gcm token and generates a new one - ensures that the user shouldn't be left without a GCM token
   def resetGcm(user: AccountId): CancellableFuture[Option[GcmRegistration]] = CancellableFuture.lift(unregister()) flatMap { _ =>
     withGcm {
@@ -86,6 +87,30 @@ class GcmGlobalService(context: Context, val prefs: PreferenceService, metadata:
           warn(s"registerGcm failed for sender: '$gcmSenderId'", ex)
           HockeyApp.saveException(ex, s"unable to register gcm for sender $gcmSenderId")
           CancellableFuture.successful(None)
+=======
+  def registerGcm(user: AccountId): CancellableFuture[Option[GcmRegistration]] = getGcmRegistration flatMap {
+    case reg @ GcmRegistration(token, _, _) if token.nonEmpty =>
+      debug(s"registerGcm, already registered: $reg, reusing token")
+      CancellableFuture.successful(Some(reg))
+
+    case reg =>
+      debug(s"registerGcm($user), registering to play previous: $reg")
+      withGcm {
+        LoggedTry { unregisterFromGoogle() } // if localytics registered first with only their sender id, we have to unregister so that our own additional sender id gets registered, too
+        try {
+          val token = registerWithGoogle(gcmSenderId.str +: metadata.localyticsSenderId.toSeq)
+          Localytics.setPushDisabled(false)
+          Localytics.setPushRegistrationId(token)
+          CancellableFuture.successful(Some(setGcmRegistration(token, AccountId(""))))
+        } catch {
+          case NonFatal(ex) =>
+            setGcmRegistration("", AccountId(""))
+            warn(s"registerGcm failed for sender: '$gcmSenderId'", ex)
+            Analytics.saveException(ex, s"unable to register gcm for sender $gcmSenderId")
+            CancellableFuture.successful(None)
+        }
+        CancellableFuture successful None
+>>>>>>> Separate Threading, Signals and other utils for modular export
       }
     }
   }

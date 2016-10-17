@@ -22,7 +22,7 @@ import java.security.{DigestOutputStream, MessageDigest}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import android.content.Context
-import com.waz.HockeyApp
+import com.waz.{Analytics, HockeyApp}
 import com.waz.ZLog._
 import com.waz.api.impl.ProgressIndicator._
 import com.waz.api.impl.{ErrorResponse, ProgressIndicator}
@@ -162,8 +162,13 @@ class VideoAssetLoader(context: Context, cache: => CacheService) extends Downloa
       CancellableFuture lift cache.move(asset.cacheKey, entry, Mime.Video.MP4, if (asset.mime == Mime.Video.MP4) asset.name else asset.name.map(_ + ".mp4"), cacheLocation = Some(cache.cacheDir)) map (Some(_))
     } recoverWith {
       case ex: Exception =>
+<<<<<<< 8f92a955a719719a5e00fbe4b6862c20b86609be
         HockeyApp.saveException(ex, s"video transcoding failed for uri: ${asset.uri}")
         InputStreamAssetLoader.addStreamToCache(cache, asset.cacheKey, AssetLoader.openStream(context, asset.uri), asset.mime, asset.name)
+=======
+        Analytics.saveException(ex, s"video transcoding failed for uri: ${request.uri}")
+        InputStreamAssetLoader.addStreamToCache(cache, request.cacheKey, AssetLoader.openStream(context, request.uri), request.mime, request.name)
+>>>>>>> Separate Threading, Signals and other utils for modular export
     }
   }
 }

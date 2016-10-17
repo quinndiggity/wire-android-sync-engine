@@ -46,7 +46,12 @@ import com.waz.sync.SyncServiceHandle
 import com.waz.threading.{CancellableFuture, Threading}
 import com.waz.utils._
 import com.waz.utils.events.Signal
+<<<<<<< 8f92a955a719719a5e00fbe4b6862c20b86609be
 import com.waz.{PermissionsService, api}
+=======
+import com.waz.{Analytics, PermissionsService, api}
+import org.threeten.bp.Instant
+>>>>>>> Separate Threading, Signals and other utils for modular export
 
 import scala.collection.breakOut
 import scala.concurrent.Future
@@ -139,6 +144,7 @@ class AssetService(val storage: AssetsStorage, generator: ImageAssetGenerator, c
         Future.successful(())
     }
 
+<<<<<<< 8f92a955a719719a5e00fbe4b6862c20b86609be
   def addImageAsset(image: com.waz.api.ImageAsset, convId: RConvId, isSelf: Boolean): Future[AssetData] = {
     val convIdOpt = if (prefs.sendWithV3) None else Some(convId) //TODO Dean remove sending with v2 after testing
     image match {
@@ -151,6 +157,25 @@ class AssetService(val storage: AssetsStorage, generator: ImageAssetGenerator, c
           } andThen { case _ => ref set null }
         case _ => Future.failed(new IllegalArgumentException(s"Unsupported ImageAsset: $image"))
       }
+=======
+  def updateAsset(id: AssetId, convId: RConvId, asset: Asset, dataId: Option[RAssetDataId], time: Date): Future[AssetData] =
+    storage.updateOrCreate(id, {
+      case data @ AnyAssetData(`id`, `convId`, _, _, _, _, _, _, _, _, _) => data.updated(AnyAssetData(id, convId, asset, dataId, time.instant))
+      case data =>
+        Analytics.saveException(new Exception(s"Unexpected asset data in updateAsset()"), s"data: $data, asset: $id, conv: $convId")
+        data
+    }, AnyAssetData(id, convId, asset, dataId, time.instant))
+
+  def updateImageAsset(asset: ImageAssetData): Future[AssetData] = storage.insert(asset)
+
+  def updateImageAsset(id: AssetId, convId: RConvId, image: ImageData): Future[AssetData] = {
+    storage.updateOrCreate(id, {
+      case im @ ImageAssetData(`id`, _, _) => im.updated(image).copy(convId = convId)
+      case data =>
+        Analytics.saveException(new Exception(s"Unexpected asset data in updateImageAsset()"), s"data: $data, asset: $id, conv: $convId")
+        data
+    }, ImageAssetData(id, convId, Seq(image)))
+>>>>>>> Separate Threading, Signals and other utils for modular export
   }
 
   def updateAssets(data: Seq[AssetData]) =
