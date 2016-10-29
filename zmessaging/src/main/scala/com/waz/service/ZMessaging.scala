@@ -77,6 +77,7 @@ class StorageModule(context: Context, accountId: AccountId, dbPrefix: String) {
   lazy val assetsStorage     = wire[AssetsStorage]
   lazy val voiceStorage      = wire[VoiceChannelStorage]
   lazy val reactionsStorage  = wire[ReactionsStorage]
+  lazy val receiptsStorage   = wire[ReceiptsStorage]
   lazy val notifStorage      = wire[NotificationStorage]
   lazy val convsStorage      = wire[ConversationStorage]
   lazy val msgDeletions      = wire[MsgDeletionStorage]
@@ -141,6 +142,7 @@ class ZMessaging(val clientId: ClientId, val userModule: UserModule) {
   def assetsStorage     = storage.assetsStorage
   def voiceStorage      = storage.voiceStorage
   def reactionsStorage  = storage.reactionsStorage
+  def receiptsStorage   = storage.receiptsStorage
   def notifStorage      = storage.notifStorage
   def convsStorage      = storage.convsStorage
   def msgDeletions      = storage.msgDeletions
@@ -286,6 +288,7 @@ class ZMessaging(val clientId: ClientId, val userModule: UserModule) {
     // services listening for storage updates
     richmedia
     ephemeral
+    receipts
 
     tempFiles
     recordAndPlay

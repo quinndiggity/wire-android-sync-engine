@@ -20,7 +20,7 @@ package com.waz.service.messages
 import com.waz.ZLog._
 import com.waz.api.Message.Status.DELIVERED
 import com.waz.api.Message.Type._
-import com.waz.content.{ConversationStorage, MessagesStorage}
+import com.waz.content.{ConversationStorage, MessagesStorage, ReceiptsStorage}
 import com.waz.model.ConversationData.ConversationType.OneToOne
 import com.waz.model.{MessageId, UserId}
 import com.waz.sync.SyncServiceHandle
@@ -31,7 +31,7 @@ import com.waz.utils.events.EventContext
 import scala.concurrent.Future
 import scala.concurrent.Future.successful
 
-class ReceiptService(messages: MessagesStorage, convs: ConversationStorage, sync: SyncServiceHandle, selfUserId: UserId) {
+class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs: ConversationStorage, sync: SyncServiceHandle, selfUserId: UserId) {
   import ImplicitTag._
   import Threading.Implicits.Background
   import EventContext.Implicits.global
@@ -44,6 +44,8 @@ class ReceiptService(messages: MessagesStorage, convs: ConversationStorage, sync
       }
     }.logFailure()
   }
+
+  messages.onDeleted { receipts.remove }
 
   val confirmable = Set(TEXT, TEXT_EMOJI_ONLY, ASSET, ANY_ASSET, VIDEO_ASSET, AUDIO_ASSET, KNOCK, RICH_MEDIA, HISTORY_LOST, LOCATION)
 
