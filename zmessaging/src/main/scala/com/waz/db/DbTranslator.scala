@@ -18,6 +18,7 @@
 package com.waz.db
 
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -30,15 +31,23 @@ import com.waz.utils.{JsonDecoder, JsonEncoder}
 import org.json.{JSONArray, JSONObject}
 import org.threeten.bp.Instant
 
+import scala.collection.BitSet
 import scala.collection.generic.CanBuild
+import scala.collection.parallel.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.language.higherKinds
 
-abstract class DbTranslator[T] {
+abstract class DbTranslator[T] { self =>
   def save(value: T, name: String, values: ContentValues): Unit
   def bind(value: T, index: Int, stmt: SQLiteProgram): Unit
   def load(cursor: Cursor, index: Int): T
   def literal(value: T): String = value.toString
+
+  def transform[A](enc: A => T, dec: T => A): DbTranslator[A] = new DbTranslator[A] {
+    override def load(cursor: Cursor, index: Int): A = dec(self.load(cursor, index))
+    override def save(value: A, name: String, values: ContentValues): Unit = self.save(enc(value), name, values)
+    override def bind(value: A, index: Int, stmt: SQLiteProgram): Unit = self.bind(enc(value), index, stmt)
+  }
 }
 
 object DbTranslator {
@@ -126,6 +135,17 @@ object DbTranslator {
     override def bind(value: Array[Byte], index: Int, stmt: SQLiteProgram): Unit = stmt.bindBlob(index, value)
     override def literal(value: Array[Byte]): String = throw new UnsupportedOperationException("can't get sql literal for blob")
   }
+  implicit val BitSetTranslator: DbTranslator[BitSet] = ByteArrayTranslator.transform[BitSet]({ set =>
+    val mask = set.toBitMask
+    val buff = ByteBuffer.allocate(mask.length * 8)
+    buff.asLongBuffer().put(mask)
+    buff.array()
+  }, { bytes =>
+    val arr = Array.ofDim[Long](bytes.length / 8)
+    ByteBuffer.wrap(bytes).asLongBuffer().get(arr)
+    immutable.BitSet.fromBitMaskNoCopy(arr)
+  })
+
   implicit object FileTranslator extends DbTranslator[File] {
     override def load(cursor: Cursor, index: Int): File = new File(cursor.getString(index))
     override def save(value: File, name: String, values: ContentValues): Unit = values.put(name, literal(value))

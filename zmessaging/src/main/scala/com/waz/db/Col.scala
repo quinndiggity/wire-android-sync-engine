@@ -28,6 +28,7 @@ import com.waz.model._
 import com.waz.utils.{JsonDecoder, JsonEncoder}
 import org.threeten.bp.Instant
 
+import scala.collection.BitSet
 import scala.collection.generic._
 import scala.concurrent.duration.FiniteDuration
 import scala.language.higherKinds
@@ -121,4 +122,5 @@ object Col {
 
   def file(name: Symbol, modifiers: String = "") = Col[File](name.name, "TEXT", modifiers)
   def blob(name: Symbol, modifiers: String = "") = Col[Array[Byte]](name.name, "BLOB", modifiers)
+  def bitSet(name: Symbol, modifiers: String = "") = Col[BitSet](name.name, "BLOB", modifiers)
 }

@@ -36,6 +36,7 @@ import com.waz.model.Liking.LikingDao
 import com.waz.model.MessageData.MessageDataDao
 import com.waz.model.MsgDeletion.MsgDeletionDao
 import com.waz.model.NotificationData.NotificationDataDao
+import com.waz.model.ReceiptData.ReceiptDataDao
 import com.waz.model.SearchQueryCache.SearchQueryCacheDao
 import com.waz.model.UserData.UserDataDao
 import com.waz.model.VoiceParticipantData.VoiceParticipantDataDao
@@ -51,7 +52,8 @@ class ZMessagingDB(context: Context, dbName: String) extends DaoDB(context.getAp
     ConversationMemberDataDao, MessageDataDao, KeyValueDataDao,
     SyncJobDao, CommonConnectionsDataDao, VoiceParticipantDataDao, NotificationDataDao, ErrorDataDao,
     ContactHashesDao, ContactsOnWireDao, InvitedContactsDao, UserClientsDao, LikingDao,
-    ContactsDao, EmailAddressesDao, PhoneNumbersDao, CallLogEntryDao, MsgDeletionDao, EditHistoryDao
+    ContactsDao, EmailAddressesDao, PhoneNumbersDao, CallLogEntryDao, MsgDeletionDao, EditHistoryDao,
+    ReceiptDataDao
   )
 
   override val migrations = Seq(
@@ -96,6 +98,9 @@ class ZMessagingDB(context: Context, dbName: String) extends DaoDB(context.getAp
     },
     Migration(76, 77) { db =>
       MessageDataMigration.v77(db)
+    },
+    Migration(77, 78) { db =>
+      db.execSQL("CREATE TABLE Receipts (_id TEXT PRIMARY KEY, recipients TEXT, delivered BLOB, read BLOB, time INTEGER)")
     }
   )
 
@@ -108,5 +113,5 @@ class ZMessagingDB(context: Context, dbName: String) extends DaoDB(context.getAp
 }
 
 object ZMessagingDB {
-  val DbVersion = 77
+  val DbVersion = 78
 }
