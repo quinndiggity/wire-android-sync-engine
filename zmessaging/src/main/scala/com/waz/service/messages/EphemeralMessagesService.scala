@@ -19,6 +19,7 @@ package com.waz.service.messages
 
 import com.waz.ZLog.ImplicitTag._
 import com.waz.ZLog._
+import com.waz.api.Message.Status
 import com.waz.api.{EphemeralExpiration, Message}
 import com.waz.content.{MessagesStorage, ZmsDatabase}
 import com.waz.model.GenericContent.{Location, Text}
@@ -62,6 +63,10 @@ class EphemeralMessagesService(selfUserId: UserId, messages: MessagesContentUpda
       if (shouldStartTimer(msg)) msg.copy(expiryTime = msg.ephemeral.expiryFromNow())
       else msg
     })
+
+    // remove own expired messages if they were already READ
+    val toRemove = updates.collect { case (prev, update) if shouldRemove(update) && update.userId == selfUserId => update.id }
+    messages.deleteOnUserRequest(toRemove)
   }
 
   private def updateNextExpiryTime(times: Seq[Instant]) = if (times.nonEmpty) {
@@ -82,11 +87,12 @@ class EphemeralMessagesService(selfUserId: UserId, messages: MessagesContentUpda
         expired.toVector
       }
     } flatMap { expired =>
-      val (toObfuscate, toRemove) = expired.partition(_.userId == selfUserId)
+      val (toRemove, toObfuscate) = expired.partition(shouldRemove)
       for {
         _ <- messages.deleteOnUserRequest(toRemove.map(_.id))
         // recalling message, this informs the sender that message is already expired
-        _ <- Future.traverse(toRemove) { m => sync.postRecalled(m.convId, MessageId(), m.id) }
+        // TODO: in group conv recall message should be only sent to msg author and own devices
+        _ <- Future.traverse(toRemove.filter(_.userId != selfUserId)) { m => sync.postRecalled(m.convId, MessageId(), m.id) }
         _ <- messages.messagesStorage.updateAll2(toObfuscate.map(_.id), obfuscate)
       } yield ()
     }
@@ -120,6 +126,9 @@ class EphemeralMessagesService(selfUserId: UserId, messages: MessagesContentUpda
         msg.copy(expired = true)
     }
   }
+
+  private def shouldRemove(msg: MessageData) =
+    msg.expiryTime.exists(_ <= Instant.now) && (msg.userId != selfUserId || msg.state == Status.READ)
 
   private def shouldStartTimer(msg: MessageData) = {
     if (msg.ephemeral == EphemeralExpiration.NONE || msg.expiryTime.isDefined) false // non-ephemeral or timer already started

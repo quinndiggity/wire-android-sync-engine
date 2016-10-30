@@ -47,8 +47,9 @@ import scala.concurrent.Future
 import scala.concurrent.Future.{successful, traverse}
 import scala.util.Success
 
-class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, edits: EditHistoryStorage, assets: AssetService, users: UserService, convs: ConversationsContentUpdater,
-    reactions: ReactionsStorage, network: NetworkModeService, sync: SyncServiceHandle, verificationUpdater: VerificationStateUpdater, timeouts: Timeouts) {
+class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, edits: EditHistoryStorage, assets: AssetService,
+                      users: UserService, convs: ConversationsContentUpdater, reactions: ReactionsStorage, network: NetworkModeService,
+                      receipts: ReceiptService, sync: SyncServiceHandle, verificationUpdater: VerificationStateUpdater, timeouts: Timeouts) {
   import Threading.Implicits.Background
   private implicit val logTag: LogTag = logTagFor[MessagesService]
   private implicit val ec = EventContext.Global
@@ -86,8 +87,22 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
       _     <- deleteCancelled(as)
       _     <- Future.traverse(recalls) { case (GenericMessage(id, MsgRecall(ref)), user, time) => recallMessage(conv.id, ref, user, MessageId(id.str), time, Message.Status.SENT) }
       _     <- RichFuture.traverseSequential(edits) { case (gm @ GenericMessage(id, MsgEdit(ref, Text(text, mentions, links))), user, time) => applyMessageEdit(conv.id, user, time, gm) }
+      _     <- processDeliveryReceipts(conv, afterCleared)
     } yield res
   }
+
+  private def processDeliveryReceipts(conv: ConversationData, events: Seq[MessageEvent]) =
+    if (conv.convType == ConversationType.Group) {
+      val delivered = events collect { case GenericMessageEvent(_, _, _, from, GenericMessage(_, Receipt(msg))) => (msg, from) }
+      Future.traverse(delivered) { case (msgId, userId, _) => receipts.addDeliveryReceipt(conv.id, msgId, userId) }
+    } else {
+      val userId = UserId(conv.id.str) // filter events from 1-1 recipient only
+      val delivered = events collect { case GenericMessageEvent(_, _, _, `userId`, GenericMessage(_, Receipt(msg))) => msg }
+      messagesStorage.updateAll2(delivered, { m =>
+        if (m.state == Status.READ || m.convId != conv.id) m  // can only modify messages in current conversation
+        else m.copy(state = Status.DELIVERED)
+      })
+    }
 
   private def updateAssets(events: Seq[MessageEvent]) = {
 
@@ -231,9 +246,11 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
           if (userId == selfUserId) Future successful Some(recall) // don't save system message for self user
           else content.addMessage(recall)
         }
-      case Some(msg) if msg.isEphemeral && convId.str == userId.str =>
-        // ephemeral messages will be recalled by receiver in 1-1 conv (once msg expires)
-        content.deleteOnUserRequest(Seq(msgId)) map { _ => None }
+      case Some(msg) if msg.isEphemeral =>
+        // ephemeral messages recall sent by receiver is treated as read-receipt
+        // conceptually using recall for this was just bad design decision, we should have used proper read-receipts instead
+        // behaviour is slightly different from proper read-receipt as recall is only sent after message expires (but it doesn't really matter to sender)
+        receipts.addReadReceipt(msg, userId)
       case msg =>
         warn(s"can not recall $msg, requeast by $userId")
         Future successful None
@@ -474,6 +491,7 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
     }
 
   def messageSent(convId: ConvId, msg: MessageData) = {
+    // TODO: add ReceiptData entry for group conv
     updateMessage(msg.id) { m => m.copy(state = Message.Status.SENT, expiryTime = m.ephemeral.expiryFromNow()) } andThen {
       case Success(Some(m)) => content.messagesStorage.onMessageSent ! m
     }

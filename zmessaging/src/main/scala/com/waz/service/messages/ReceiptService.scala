@@ -18,23 +18,24 @@
 package com.waz.service.messages
 
 import com.waz.ZLog._
-import com.waz.api.Message.Status.DELIVERED
+import com.waz.api.Message.Status
 import com.waz.api.Message.Type._
 import com.waz.content.{ConversationStorage, MessagesStorage, ReceiptsStorage}
 import com.waz.model.ConversationData.ConversationType.OneToOne
-import com.waz.model.{MessageId, UserId}
+import com.waz.model.{ConvId, MessageData, MessageId, UserId}
 import com.waz.sync.SyncServiceHandle
 import com.waz.threading.Threading
 import com.waz.utils._
 import com.waz.utils.events.EventContext
 
 import scala.concurrent.Future
-import scala.concurrent.Future.successful
 
 class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs: ConversationStorage, sync: SyncServiceHandle, selfUserId: UserId) {
   import EventContext.Implicits.global
   import ImplicitTag._
   import Threading.Implicits.Background
+
+  val confirmable = Set(TEXT, TEXT_EMOJI_ONLY, ASSET, ANY_ASSET, VIDEO_ASSET, AUDIO_ASSET, KNOCK, RICH_MEDIA, HISTORY_LOST, LOCATION)
 
   messages.onAdded { msgs =>
     Future.traverse(msgs.iterator.filter(msg => msg.userId != selfUserId && confirmable(msg.msgType))) { msg =>
@@ -47,11 +48,35 @@ class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs
 
   messages.onDeleted { receipts.remove(_) }
 
-  val confirmable = Set(TEXT, TEXT_EMOJI_ONLY, ASSET, ANY_ASSET, VIDEO_ASSET, AUDIO_ASSET, KNOCK, RICH_MEDIA, HISTORY_LOST, LOCATION)
+  messages.onMessageSent { msg =>
+    // add ReceiptData for messages sent in group conversation
+    // TODO: we need to know exact set of users this message was sent to (at this point conv members could already be changes)
+  }
 
-  def processReceipts(receipts: Seq[MessageId]) =
-    if (receipts.nonEmpty) {
-      debug(s"received receipts: $receipts")
-      messages.updateAll2(receipts, _.copy(state = DELIVERED))
-    } else successful(Seq.empty)
+  def addDeliveryReceipt(conv: ConvId, msg: MessageId, userId: UserId) = {
+
+    def setMessageDelivered() = // set DELIVERED if not READ already
+      messages.update(msg, { m =>
+        if (m.state == Status.READ || m.convId != conv) m
+        else m.copy(state = Status.DELIVERED)
+      })
+
+    if (conv.str == userId.str) setMessageDelivered()
+    else receipts.update(msg, _.withDelivered(userId)) flatMap {
+      case Some((_, data)) if data.isMessageRead => setMessageDelivered()
+      case _ => Future successful None
+    }
+  }
+
+  def addReadReceipt(msg: MessageData, userId: UserId) =
+    if (msg.convId.str == userId.str) { // got read receipt in 1-1
+      // we don't store receipts for 1-1, we can just update message state here
+      messages.update(msg.id, _.copy(state = Status.READ))
+    } else
+      receipts.update(msg.id, _.withRead(userId)) flatMap {
+        case Some((_, data)) if data.isMessageRead =>
+          // update message state and remove receipt data (no longer needed)
+          messages.update(msg.id, _.copy(state = Status.READ)) andThen { case _ => receipts.remove(msg.id) }
+        case _ => Future successful None
+      }
 }

@@ -20,11 +20,9 @@ package com.waz.model
 import android.database.Cursor
 import com.waz.db.Col._
 import com.waz.db.{Dao, Table}
-import com.waz.utils.{JsonDecoder, JsonEncoder}
-import org.json.JSONObject
 import org.threeten.bp.Instant
 
-import scala.collection.{BitSet, Searching}
+import scala.collection.BitSet
 
 /**
   * Keeps info about message recipients.
@@ -57,6 +55,10 @@ case class ReceiptData(id: MessageId,
   def withRead(users: UserId*) = copy(
     read = read ++ recipients.indicesOf(users)
   )
+
+  def isMessageDelivered = delivered.size == recipients.size
+
+  def isMessageRead = read.size == recipients.size
 }
 
 object ReceiptData {
@@ -72,37 +74,5 @@ object ReceiptData {
     override val table = new Table[ReceiptData]("Receipts", Id, Recipients, Delivered, Read, Time)
 
     override def apply(implicit c: Cursor): ReceiptData = ReceiptData(Id, Recipients, Delivered, Read, Time)
-  }
-}
-
-class Recipients private (val users: IndexedSeq[UserId]) {
-  import Searching._
-
-  lazy val zipWithIndex = users.zipWithIndex
-
-  def indexOf(id: UserId) = users.search(id) match {
-    case Found(index) => index
-    case _ => -1
-  }
-
-  def indicesOf(ids: Seq[UserId]) = ids map { users.search(_) } collect { case Found(index) => index }
-}
-
-object Recipients {
-
-  def apply(users: Seq[UserId]) = new Recipients(users.sorted.toIndexedSeq)
-
-  def fromSorted(users: IndexedSeq[UserId]) = new Recipients(users)
-
-  implicit object Encoder extends JsonEncoder[Recipients] {
-    override def apply(v: Recipients): JSONObject = JsonEncoder { obj =>
-      obj.put("recipients", JsonEncoder.array(v.users) { case (arr, id) => arr.put(id.str) })
-    }
-  }
-
-  implicit object Decoder extends JsonDecoder[Recipients] {
-    import JsonDecoder._
-    override def apply(implicit js: JSONObject): Recipients =
-      Recipients.fromSorted(decodeUserIdSeq('recipients).toIndexedSeq)
   }
 }

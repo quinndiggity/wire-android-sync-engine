@@ -28,8 +28,12 @@ import org.threeten.bp.Instant
 
 import scala.concurrent.Future.traverse
 
+/**
+  * Service processing generic messages sent on self conv.
+  * Those are state sync messages sent between own user devices.
+  */
 class GenericMessageService(messages: MessagesContentUpdater, convs: ConversationsContentUpdater,
-    convEvents: ConversationEventsService, images: AssetService, reactions: ReactionsService, receipts: ReceiptService) {
+    convEvents: ConversationEventsService, images: AssetService, reactions: ReactionsService) {
 
   private implicit val tag: LogTag = logTagFor[GenericMessageService]
   import com.waz.threading.Threading.Implicits.Background
@@ -38,6 +42,7 @@ class GenericMessageService(messages: MessagesContentUpdater, convs: Conversatio
 
     def lastForConv(items: Seq[(RConvId, Instant)]) = items.groupBy(_._1).map { case (conv, times) => times.maxBy(_._2.toEpochMilli) }
 
+    // TODO: reactions should be handled in MessagesService, as those are received on different conversations
     val incomingReactions = events collect {
       case GenericMessageEvent(_, _, time, from, GenericMessage(_, Reaction(msg, action))) => Liking(msg, from, time.instant, action)
     }
@@ -54,10 +59,6 @@ class GenericMessageService(messages: MessagesContentUpdater, convs: Conversatio
       case GenericMessageEvent(_, _, _, _, GenericMessage(_, MsgDeleted(_, msg))) => msg
     }
 
-    val confirmed = events collect {
-      case GenericMessageEvent(_, _, _, _, GenericMessage(_, Receipt(msg))) => msg
-    }
-
     for {
       _ <- messages.deleteOnUserRequest(deleted)
       _ <- traverse(lastRead) { case (remoteId, timestamp) =>
@@ -67,7 +68,6 @@ class GenericMessageService(messages: MessagesContentUpdater, convs: Conversatio
       _ <- traverse(cleared) { case (remoteId, timestamp) =>
         convs.processConvWithRemoteId(remoteId, retryAsync = true) { conv => convs.updateConversationCleared(conv.id, timestamp) }
       }
-      _ <- receipts.processReceipts(confirmed)
     } yield ()
   }
 }
