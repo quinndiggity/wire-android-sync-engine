@@ -33,7 +33,7 @@ import org.threeten.bp.Instant
 
 import scala.collection.BitSet
 import scala.collection.generic.CanBuild
-import scala.collection.parallel.immutable
+import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.language.higherKinds
 
