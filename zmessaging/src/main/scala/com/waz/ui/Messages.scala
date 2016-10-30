@@ -59,11 +59,6 @@ class Messages(implicit module: UiModule) {
     val msg = getOrUpdate(messages)(data.message.id, new Message(data)(module))
 
     if (userAction) {
-      if (msg.data.state == api.Message.Status.FAILED) {
-        verbose(s"user read FAILED message: ${msg.data}")
-        module.zms(_.messages.markMessageRead(data.message.convId, data.message.id))
-      }
-
       if (msg.data.content exists syncNeeded) module.zms(_.sync.syncRichMedia(data.message.id, Priority.High))
     }
     msg

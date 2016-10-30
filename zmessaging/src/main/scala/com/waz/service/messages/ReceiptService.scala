@@ -32,9 +32,9 @@ import scala.concurrent.Future
 import scala.concurrent.Future.successful
 
 class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs: ConversationStorage, sync: SyncServiceHandle, selfUserId: UserId) {
+  import EventContext.Implicits.global
   import ImplicitTag._
   import Threading.Implicits.Background
-  import EventContext.Implicits.global
 
   messages.onAdded { msgs =>
     Future.traverse(msgs.iterator.filter(msg => msg.userId != selfUserId && confirmable(msg.msgType))) { msg =>
@@ -45,7 +45,7 @@ class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs
     }.logFailure()
   }
 
-  messages.onDeleted { receipts.remove }
+  messages.onDeleted { receipts.remove(_) }
 
   val confirmable = Set(TEXT, TEXT_EMOJI_ONLY, ASSET, ANY_ASSET, VIDEO_ASSET, AUDIO_ASSET, KNOCK, RICH_MEDIA, HISTORY_LOST, LOCATION)
 

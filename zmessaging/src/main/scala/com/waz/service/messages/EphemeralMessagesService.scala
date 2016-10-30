@@ -17,10 +17,11 @@
  */
 package com.waz.service.messages
 
+import com.waz.ZLog.ImplicitTag._
+import com.waz.ZLog._
 import com.waz.api.{EphemeralExpiration, Message}
 import com.waz.content.{MessagesStorage, ZmsDatabase}
-import com.waz.model.AssetStatus.{UploadDone, UploadFailed}
-import com.waz.model.GenericContent.{Asset, Ephemeral, ImageAsset, Location, Text}
+import com.waz.model.GenericContent.{Location, Text}
 import com.waz.model.MessageData.MessageDataDao
 import com.waz.model._
 import com.waz.sync.SyncServiceHandle
@@ -28,8 +29,6 @@ import com.waz.threading.CancellableFuture
 import com.waz.utils._
 import com.waz.utils.events.Signal
 import org.threeten.bp.Instant
-import com.waz.ZLog._
-import com.waz.ZLog.ImplicitTag._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -56,6 +55,13 @@ class EphemeralMessagesService(selfUserId: UserId, messages: MessagesContentUpda
 
   storage.onUpdated { updates =>
     updateNextExpiryTime(updates.flatMap(_._2.expiryTime))
+
+    // start expiration timer for ephemeral message if it was just read
+    val toStart = updates.collect { case (prev, update) if shouldStartTimer(update) => update.id }
+    storage.updateAll2(toStart, { msg =>
+      if (shouldStartTimer(msg)) msg.copy(expiryTime = msg.ephemeral.expiryFromNow())
+      else msg
+    })
   }
 
   private def updateNextExpiryTime(times: Seq[Instant]) = if (times.nonEmpty) {
@@ -115,25 +121,10 @@ class EphemeralMessagesService(selfUserId: UserId, messages: MessagesContentUpda
     }
   }
 
-  // start expiration timer for ephemeral message
-  def onMessageRead(id: MessageId) = storage.update(id, { msg =>
-    if (shouldStartTimer(msg)) msg.copy(expiryTime = msg.ephemeral.expiryFromNow())
-    else msg
-  })
-
   private def shouldStartTimer(msg: MessageData) = {
-    if (msg.ephemeral == EphemeralExpiration.NONE || msg.expiryTime.isDefined) false // timer already started
+    if (msg.ephemeral == EphemeralExpiration.NONE || msg.expiryTime.isDefined) false // non-ephemeral or timer already started
     else if (msg.userId == selfUserId) false // timer for own messages is started in MessagesService.messageSent
-    else msg.msgType match {
-      case MessageData.IsAsset() | Message.Type.ASSET =>
-        // check if asset was fully uploaded
-        msg.protos.exists {
-          case GenericMessage(_, Ephemeral(_, Asset(_, _, UploadDone(_) | UploadFailed))) => true
-          case GenericMessage(_, Ephemeral(_, ImageAsset(ImageData.Tag.Medium, _, _, _, _, _, _, _, _))) => true
-          case _ => false
-        }
-      case _ => true
-    }
+    else msg.state == Message.Status.READ
   }
 }
 

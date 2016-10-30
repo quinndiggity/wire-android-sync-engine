@@ -38,7 +38,7 @@ public interface Message extends UiObservable, Parcelable {
     };
 
     enum Status {
-        DEFAULT, SENT, PENDING, DELETED, FAILED, FAILED_READ, DELIVERED;
+        DEFAULT, SENT, PENDING, DELETED, FAILED, FAILED_READ, DELIVERED, READ;
 
         public boolean isFailed() {
             return this == FAILED;

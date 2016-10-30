@@ -24,7 +24,7 @@ import com.waz.ZLog._
 import com.waz.api.Message.{Status, Type}
 import com.waz.api.{ErrorResponse, Message, Verification}
 import com.waz.content.{EditHistoryStorage, ReactionsStorage}
-import com.waz.model.AssetStatus.UploadCancelled
+import com.waz.model.AssetStatus.{UploadCancelled, UploadDone, UploadFailed}
 import com.waz.model.ConversationData.ConversationType
 import com.waz.model.GenericContent.Asset.Original
 import com.waz.model.GenericContent._
@@ -479,6 +479,27 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
     }
   }
 
+  def messageRead(id: MessageId) = content.updateMessage(id) { msg =>
+    if (shouldMarkAsRead(msg)) msg.copy(state = Status.READ)
+    else if (msg.state == Status.FAILED && network.isOnlineMode) msg.copy(state = Status.FAILED_READ)
+    else msg
+  }
+
+  private def shouldMarkAsRead(msg: MessageData) = {
+    def msgDataAvailable = msg.msgType match {
+      case MessageData.IsAsset() | Message.Type.ASSET =>
+        // check if asset was fully uploaded
+        msg.protos.exists {
+          case GenericMessage(_, Ephemeral(_, Asset(_, _, UploadDone(_) | UploadFailed))) => true
+          case GenericMessage(_, Ephemeral(_, ImageAsset(ImageData.Tag.Medium, _, _, _, _, _, _, _, _))) => true
+          case _ => false
+        }
+      case _ => true
+    }
+
+    msg.userId != selfUserId && msg.state != Status.READ && msgDataAvailable
+  }
+
   def messageDeliveryFailed(convId: ConvId, msg: MessageData, error: ErrorResponse) =
     updateMessageState(convId, msg.id, Message.Status.FAILED) andThen {
       case Success(Some(m)) => content.messagesStorage.onMessageFailed ! (m, error)
@@ -486,12 +507,4 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
 
   def updateMessageState(convId: ConvId, messageId: MessageId, state: Message.Status) =
     updateMessage(messageId) { _.copy(state = state) }
-
-  def markMessageRead(convId: ConvId, id: MessageId) =
-    if (network.isOfflineMode) CancellableFuture.successful(None)
-    else
-      updateMessage(id) { msg =>
-        if (msg.state == Status.FAILED) msg.copy(state = Status.FAILED_READ)
-        else msg
-      }
 }
