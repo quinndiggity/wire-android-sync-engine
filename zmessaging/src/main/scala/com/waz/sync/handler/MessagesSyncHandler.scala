@@ -31,6 +31,7 @@ import com.waz.model.ConversationData.ConversationType
 import com.waz.model.GenericContent.Asset.ImageMetaData
 import com.waz.model.GenericContent.{Ephemeral, Knock, Location, MsgEdit}
 import com.waz.model._
+import com.waz.model.sync.ReceiptType
 import com.waz.service.assets._
 import com.waz.service.conversation.{ConversationEventsService, ConversationsContentUpdater}
 import com.waz.service.messages.{MessagesContentUpdater, MessagesService}
@@ -83,10 +84,15 @@ class MessagesSyncHandler(context: Context, service: MessagesService, msgContent
         successful(SyncResult(internalError("conversation not found")))
     }
 
-  def postReceipt(convId: ConvId, msgId: MessageId, userId: UserId): Future[SyncResult] =
+  def postReceipt(convId: ConvId, msgId: MessageId, userId: UserId, tpe: ReceiptType): Future[SyncResult] =
     convs.convById(convId) flatMap {
       case Some(conv) =>
-        otrSync.postOtrMessage(conv.id, conv.remoteId, GenericMessage(msgId.uid, Proto.Receipt(msgId)), Some(Set(userId)), nativePush = false).map {
+        val (content, recipients) = tpe match {
+          case ReceiptType.Delivery         => (Proto.Receipt(msgId), Set(userId))
+          case ReceiptType.EphemeralExpired => (Proto.MsgRecall(msgId), Set(users.selfUserId, userId))
+        }
+
+        otrSync.postOtrMessage(conv.id, conv.remoteId, GenericMessage(msgId.uid, content), Some(recipients), nativePush = false) map {
           case Left(e) => SyncResult(e)
           case Right(time) => SyncResult.Success
         }

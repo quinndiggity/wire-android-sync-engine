@@ -94,7 +94,7 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
   private def processDeliveryReceipts(conv: ConversationData, events: Seq[MessageEvent]) =
     if (conv.convType == ConversationType.Group) {
       val delivered = events collect { case GenericMessageEvent(_, _, _, from, GenericMessage(_, Receipt(msg))) => (msg, from) }
-      Future.traverse(delivered) { case (msgId, userId, _) => receipts.addDeliveryReceipt(conv.id, msgId, userId) }
+      Future.traverse(delivered) { case (msgId, userId) => receipts.addDeliveryReceipt(conv.id, msgId, userId) }
     } else {
       val userId = UserId(conv.id.str) // filter events from 1-1 recipient only
       val delivered = events collect { case GenericMessageEvent(_, _, _, `userId`, GenericMessage(_, Receipt(msg))) => msg }
@@ -240,19 +240,25 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
 
   def recallMessage(convId: ConvId, msgId: MessageId, userId: UserId, systemMsgId: MessageId = MessageId(), time: Instant = Instant.now(), state: Message.Status = Message.Status.PENDING) =
     content.getMessage(msgId) flatMap {
+      case Some(msg) if msg.convId != convId =>
+        error(s"can not recall message belonging to other conversation: $msg, requested by $userId")
+        Future successful None
       case Some(msg) if msg.canRecall(convId, userId) =>
         content.deleteOnUserRequest(Seq(msgId)) flatMap { _ =>
           val recall = MessageData(systemMsgId, convId, Message.Type.RECALLED, time = msg.time, editTime = time max msg.time, userId = userId, state = state, protos = Seq(GenericMessage(systemMsgId.uid, MsgRecall(msgId))))
           if (userId == selfUserId) Future successful Some(recall) // don't save system message for self user
           else content.addMessage(recall)
         }
+      case Some(msg) if msg.isEphemeral && userId == selfUserId =>
+        // ephemeral message expired on other device, removing
+        content.deleteOnUserRequest(Seq(msgId))
       case Some(msg) if msg.isEphemeral =>
         // ephemeral messages recall sent by receiver is treated as read-receipt
         // conceptually using recall for this was just bad design decision, we should have used proper read-receipts instead
         // behaviour is slightly different from proper read-receipt as recall is only sent after message expires (but it doesn't really matter to sender)
         receipts.addReadReceipt(msg, userId)
       case msg =>
-        warn(s"can not recall $msg, requeast by $userId")
+        warn(s"can not recall $msg, requested by $userId")
         Future successful None
     }
 

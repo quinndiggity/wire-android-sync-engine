@@ -151,12 +151,16 @@ object SyncRequest {
     override def merge(req: SyncRequest) = mergeHelper[PostOpenGraphMeta](req)(r => Merged(PostOpenGraphMeta(convId, messageId, editTime max r.editTime)))
   }
 
-  case class PostReceipt(convId: ConvId, messageId: MessageId, userId: UserId) extends RequestForConversation(Cmd.PostReceipt) {
-    override val mergeKey = (cmd, messageId)
+  case class PostReceipt(convId: ConvId, messageId: MessageId, userId: UserId, tpe: ReceiptType) extends RequestForConversation(Cmd.PostReceipt) {
+    override val mergeKey = (cmd, messageId, userId, tpe)
   }
 
   case class PostDeleted(convId: ConvId, messageId: MessageId) extends RequestForConversation(Cmd.PostDeleted) {
     override val mergeKey = (cmd, convId, messageId)
+  }
+
+  case class PostEphemeralRead(convId: ConvId, msg: MessageId) extends RequestForConversation(Cmd.PostRecalled) {
+    override val mergeKey = (cmd, convId, msg)
   }
 
   case class PostRecalled(convId: ConvId, msg: MessageId, recalledId: MessageId) extends RequestForConversation(Cmd.PostRecalled) {
@@ -321,7 +325,7 @@ object SyncRequest {
         case Cmd.PostLiking            => PostLiking(convId, JsonDecoder[Liking]('liking))
         case Cmd.PostSessionReset      => PostSessionReset(convId, userId, decodeId[ClientId]('client))
         case Cmd.PostOpenGraphMeta     => PostOpenGraphMeta(convId, messageId, 'time)
-        case Cmd.PostReceipt           => PostReceipt(convId, messageId, userId)
+        case Cmd.PostReceipt           => PostReceipt(convId, messageId, userId, ReceiptType.fromName('type))
         case Cmd.Unknown               => Unknown
       }
     }
@@ -364,9 +368,10 @@ object SyncRequest {
           putId("message", messageId)
           o.put("time", time.toEpochMilli)
 
-        case PostReceipt(_, messageId, userId) =>
+        case PostReceipt(_, messageId, userId, tpe) =>
           putId("message", messageId)
           putId("user", userId)
+          o.put("type", tpe)
 
         case PostConnection(_, name, message) =>
           o.put("name", name)
