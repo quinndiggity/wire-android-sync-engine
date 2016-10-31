@@ -39,7 +39,7 @@ class Recipients private (val users: IndexedSeq[UserId]) {
 
 object Recipients {
 
-  def apply(users: Seq[UserId]) = new Recipients(users.sorted.toIndexedSeq)
+  def apply(users: Traversable[UserId]) = new Recipients(users.toIndexedSeq.sorted)
 
   def fromSorted(users: IndexedSeq[UserId]) = new Recipients(users)
 

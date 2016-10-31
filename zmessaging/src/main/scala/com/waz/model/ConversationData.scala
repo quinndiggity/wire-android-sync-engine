@@ -64,6 +64,8 @@ case class ConversationData(id: ConvId,
   def savedOrFreshSearchKey = searchKey.orElse(freshSearchKey)
   def freshSearchKey = if (convType == ConversationType.Group) name map SearchKey else None
 
+  def isGroup = convType == ConversationType.Group
+  
   lazy val completelyCleared = ! cleared.isBefore(lastEventTime)
 
   def withLastRead(time: Instant) = copy(lastRead = lastRead max time)

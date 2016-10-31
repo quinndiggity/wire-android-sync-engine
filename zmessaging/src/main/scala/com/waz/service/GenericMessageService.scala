@@ -22,7 +22,7 @@ import com.waz.model.GenericContent._
 import com.waz.model._
 import com.waz.service.assets.AssetService
 import com.waz.service.conversation.{ConversationEventsService, ConversationsContentUpdater}
-import com.waz.service.messages.{ReactionsService, MessagesContentUpdater, ReceiptService}
+import com.waz.service.messages.{MessagesContentUpdater, ReactionsService}
 import com.waz.utils._
 import org.threeten.bp.Instant
 
@@ -43,6 +43,7 @@ class GenericMessageService(messages: MessagesContentUpdater, convs: Conversatio
     def lastForConv(items: Seq[(RConvId, Instant)]) = items.groupBy(_._1).map { case (conv, times) => times.maxBy(_._2.toEpochMilli) }
 
     // TODO: reactions should be handled in MessagesService, as those are received on different conversations
+    // we should only handle self conv events in this service, just for separation
     val incomingReactions = events collect {
       case GenericMessageEvent(_, _, time, from, GenericMessage(_, Reaction(msg, action))) => Liking(msg, from, time.instant, action)
     }

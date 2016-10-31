@@ -22,7 +22,8 @@ import com.waz.api.Message.Status
 import com.waz.api.Message.Type._
 import com.waz.content.{ConversationStorage, MessagesStorage, ReceiptsStorage}
 import com.waz.model.ConversationData.ConversationType.OneToOne
-import com.waz.model.{ConvId, MessageData, MessageId, UserId}
+import com.waz.model._
+import com.waz.model.sync.ReceiptType
 import com.waz.sync.SyncServiceHandle
 import com.waz.threading.Threading
 import com.waz.utils._
@@ -41,7 +42,7 @@ class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs
     Future.traverse(msgs.iterator.filter(msg => msg.userId != selfUserId && confirmable(msg.msgType))) { msg =>
       convs.get(msg.convId).map(_.filter(_.convType == OneToOne)).flatMapSome { _ =>
         verbose(s"will send receipt for $msg")
-        sync.postReceipt(msg.convId, msg.id, msg.userId)
+        sync.postReceipt(msg.convId, msg.id, msg.userId, ReceiptType.Delivery)
       }
     }.logFailure()
   }
@@ -52,6 +53,8 @@ class ReceiptService(messages: MessagesStorage, receipts: ReceiptsStorage, convs
     // add ReceiptData for messages sent in group conversation
     // TODO: we need to know exact set of users this message was sent to (at this point conv members could already be changes)
   }
+
+  def create(id: MessageId, users: Set[UserId]) = receipts.insert(ReceiptData(id, Recipients(users)))
 
   def addDeliveryReceipt(conv: ConvId, msg: MessageId, userId: UserId) = {
 

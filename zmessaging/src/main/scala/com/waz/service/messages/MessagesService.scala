@@ -496,10 +496,18 @@ class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, e
       case _ => successful(None)
     }
 
-  def messageSent(convId: ConvId, msg: MessageData) = {
-    // TODO: add ReceiptData entry for group conv
-    updateMessage(msg.id) { m => m.copy(state = Message.Status.SENT, expiryTime = m.ephemeral.expiryFromNow()) } andThen {
-      case Success(Some(m)) => content.messagesStorage.onMessageSent ! m
+  def messageSent(conv: ConversationData, msg: MessageData, recipients: Set[UserId]) = {
+
+    // creates ReceiptData entry if needed
+    // currently we only need that for ephemeral messages in group convs
+    val receipt =
+      if (conv.isGroup && msg.isEphemeral) receipts.create(msg.id, recipients - selfUserId)
+      else Future.successful(())
+
+    receipt flatMap { _ =>
+      updateMessage(msg.id) { m => m.copy(state = Message.Status.SENT, expiryTime = m.ephemeral.expiryFromNow()) } andThen {
+        case Success(Some(m)) => content.messagesStorage.onMessageSent ! m
+      }
     }
   }
 

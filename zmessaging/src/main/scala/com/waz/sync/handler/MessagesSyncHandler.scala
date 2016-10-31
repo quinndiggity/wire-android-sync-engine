@@ -122,7 +122,7 @@ class MessagesSyncHandler(context: Context, service: MessagesService, msgContent
               SyncResult.Failure(Some(internalError(e.getMessage)), shouldRetry = false)
           }
           .flatMap {
-            case SyncResult.Success => service.messageSent(conv.id, msg) map (_ => SyncResult.Success )
+            case SyncResult.Success => service.messageSent(conv, msg, recipients) map (_ => SyncResult.Success )
             case res @ SyncResult.Failure(Some(ErrorResponse.Cancelled), _) =>
               verbose(s"postMessage($msg) was cancelled")
               msgContent.updateMessage(id)(_.copy(state = Message.Status.FAILED_READ)) map { _ => res }
