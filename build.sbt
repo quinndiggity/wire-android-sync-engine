@@ -47,7 +47,7 @@ resolvers in ThisBuild ++= Seq(
 lazy val licenseHeaders = HeaderPlugin.autoImport.headers := Set("scala", "java", "rs") .map { _ -> GPLv3("2016", "Wire Swiss GmbH") } (collection.breakOut)
 
 lazy val root = Project("zmessaging-android", file("."))
-  .aggregate(macrosupport, zmessaging, core)
+  .aggregate(macrosupport, zmessaging)
   .settings(
     aggregate := false,
     aggregate in clean := true,
@@ -59,43 +59,12 @@ lazy val root = Project("zmessaging-android", file("."))
     publishLocal := { (publishLocal in zmessaging).value },
     publishM2 := {
       (publishM2 in zmessaging).value
-      (publishM2 in core).value
     }
-  )
-
-lazy val core = (project in file("core"))
-  .enablePlugins(AutomateHeaderPlugin).settings(licenseHeaders)
-  .dependsOn(macrosupport)
-  .settings(
-    libraryDependencies ++= Seq(
-      "ch.qos.logback" % "logback-classic" % "1.1.7",
-      "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
-      "org.json" % "json" % "20160810",
-      "commons-codec" % "commons-codec" % "1.10",
-      "com.wire" % "generic-message-proto" % "1.18.0",
-      "com.wire" % "backend-api-proto" % "1.1",
-      "org.threeten" % "threetenbp" % "1.3",
-//      "org.java-websocket" % "Java-WebSocket" % "1.3.0",
-      "javax.websocket" % "javax.websocket-api" % "1.1",
-      "org.glassfish.tyrus" % "tyrus-client" % "1.13",
-      "org.glassfish.tyrus" % "tyrus-container-grizzly-client" % "1.13",
-
-      "org.apache.httpcomponents" % "httpclient" % "4.5.3",
-      "org.apache.httpcomponents" % "fluent-hc" % "4.5.3",
-
-      "org.apache.commons" % "commons-collections4" % "4.1",
-
-      "org.xerial" % "sqlite-jdbc" % "3.15.1",
-
-      //test dependencies
-      "org.scalatest" %% "scalatest" % "2.2.6" % "test", //scalamock 3.2.2 is incompatible with scalatest 3.0.0
-      "org.scalamock" %% "scalamock-scalatest-support" % "3.2.2" % "test"
-    )
   )
 
 lazy val zmessaging = project
   .enablePlugins(AutomateHeaderPlugin).settings(licenseHeaders)
-  .dependsOn(macrosupport, core)
+  .dependsOn(macrosupport)
   .settings(android.Plugin.androidBuildAar: _*)
   .settings(publishSettings: _*)
   .settings(
