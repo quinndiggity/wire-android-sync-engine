@@ -46,7 +46,7 @@ import scala.util.Success
 
 class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, edits: EditHistoryStorage, assets: AssetService,
                       prefs: PreferenceService, users: UserService, convs: ConversationsContentUpdater, reactions: ReactionsStorage,
-                      network: NetworkModeService, sync: SyncServiceHandle, verificationUpdater: VerificationStateUpdater, timeouts: Timeouts) {
+                      network: DefaultNetworkModeService, sync: SyncServiceHandle, verificationUpdater: VerificationStateUpdater, timeouts: Timeouts) {
   import Threading.Implicits.Background
   private implicit val logTag: LogTag = logTagFor[MessagesService]
   private implicit val ec = EventContext.Global
