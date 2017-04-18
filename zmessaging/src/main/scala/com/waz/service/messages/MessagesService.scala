@@ -28,7 +28,7 @@ import com.waz.model.GenericContent._
 import com.waz.model.{IdentityChangedError, MessageId, _}
 import com.waz.service._
 import com.waz.service.assets.AssetService
-import com.waz.service.conversation.ConversationsContentUpdater
+import com.waz.service.conversation.DefaultConversationsContentUpdater
 import com.waz.service.otr.VerificationStateUpdater
 import com.waz.service.otr.VerificationStateUpdater.{ClientAdded, ClientUnverified, MemberAdded, VerificationChange}
 import com.waz.sync.SyncServiceHandle
@@ -45,7 +45,7 @@ import scala.concurrent.Future.{successful, traverse}
 import scala.util.Success
 
 class MessagesService(selfUserId: UserId, val content: MessagesContentUpdater, edits: EditHistoryStorage, assets: AssetService,
-                      prefs: PreferenceService, users: UserService, convs: ConversationsContentUpdater, reactions: ReactionsStorage,
+                      prefs: PreferenceService, users: UserService, convs: DefaultConversationsContentUpdater, reactions: ReactionsStorage,
                       network: DefaultNetworkModeService, sync: SyncServiceHandle, verificationUpdater: VerificationStateUpdater, timeouts: Timeouts) {
   import Threading.Implicits.Background
   private implicit val logTag: LogTag = logTagFor[MessagesService]
